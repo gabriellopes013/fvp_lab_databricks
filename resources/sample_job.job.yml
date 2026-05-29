@@ -1,0 +1,101 @@
+resources:
+  jobs:
+    fvp_workflow:
+      name: fvp_workflow
+
+      tasks:
+
+        # ==================================
+        # INGESTION
+        # ==================================
+
+        - task_key: sro_ingestion
+          notebook_task:
+            notebook_path: ../01_Ingestion/nb_01_sro_ingestion.py
+            base_parameters:
+              catalog: ${var.catalog}
+
+        # ==================================
+        # BRONZE → SILVER
+        # ==================================
+
+        - task_key: bronze_to_silver
+          depends_on:
+            - task_key: sro_ingestion
+          notebook_task:
+            notebook_path: ../02_batch/nb_02_bronze_to_silver.py
+            base_parameters:
+              catalog: ${var.catalog}
+
+        # ==================================
+        # SILVER → COSMOS
+        # ==================================
+
+        - task_key: silver_to_cosmos
+          depends_on:
+            - task_key: bronze_to_silver
+          notebook_task:
+            notebook_path: ../02_batch/nb_03_silver_to_cosmos.py
+            base_parameters:
+              catalog: ${var.catalog}
+
+        # ==================================
+        # RESOURCE CREATION
+        # ==================================
+
+        - task_key: resource_creation
+          depends_on:
+            - task_key: silver_to_cosmos
+          notebook_task:
+            notebook_path: ../02_batch/nb_04_resource_creation.py
+            base_parameters:
+              catalog: ${var.catalog}
+
+        # ==================================
+        # CREATE STREAM TABLE
+        # ==================================
+
+        - task_key: create_policy_consent
+          depends_on:
+            - task_key: resource_creation
+          notebook_task:
+            notebook_path: ../03_Stream/nb_04_create_policy_consent.py
+            base_parameters:
+              catalog: ${var.catalog}
+
+        # ==================================
+        # GENERATE MOCK EVENTS
+        # ==================================
+
+        - task_key: seed_kafka_messages
+          depends_on:
+            - task_key: create_policy_consent
+          notebook_task:
+            notebook_path: ../03_Stream/nb_05_seed_kafka_messages.py
+            base_parameters:
+              catalog: ${var.catalog}
+
+        # ==================================
+        # PROCESS STREAM
+        # ==================================
+
+        - task_key: policy_consent_stream
+          depends_on:
+            - task_key: seed_kafka_messages
+          notebook_task:
+            notebook_path: ../03_Stream/nb_06_policy_consent_stream.py
+            base_parameters:
+              catalog: ${var.catalog}
+
+        # ==================================
+        # API SIMULATION
+        # ==================================
+
+        - task_key: api_simulation
+          depends_on:
+            - task_key: policy_consent_stream
+          notebook_task:
+            notebook_path: ../05_api/nb_10_api_simulation.py
+            base_parameters:
+              catalog: ${var.catalog}
+              policy_id: P001
