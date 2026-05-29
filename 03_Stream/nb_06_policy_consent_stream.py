@@ -1,33 +1,65 @@
 # Databricks notebook source
+
 from pyspark.sql.types import *
 from pyspark.sql import functions as F
 from delta.tables import DeltaTable
 
-# COMMAND ----------
 
-# MAGIC %sql
-# MAGIC USE CATALOG fvp_lab;
-# MAGIC
-# MAGIC CREATE VOLUME IF NOT EXISTS raw.checkpoints;
+# ==========================================
+# PARAMETERS
+# ==========================================
 
-# COMMAND ----------
+dbutils.widgets.text(
+    "catalog",
+    "fvp_lab"
+)
+
+CATALOG = dbutils.widgets.get(
+    "catalog"
+)
+
+print(
+    f"Catalog atual: {CATALOG}"
+)
+
+
+# ==========================================
+# CREATE CHECKPOINT VOLUME
+# ==========================================
+
+spark.sql(
+    f"USE CATALOG {CATALOG}"
+)
+
+spark.sql(
+    """
+    CREATE VOLUME IF NOT EXISTS
+    raw.checkpoints
+    """
+)
+
+
+# ==========================================
+# PATHS
+# ==========================================
 
 # ==========================================
 # PATHS
 # ==========================================
 
 KAFKA_PATH = (
-    "/Volumes/fvp_lab/raw/"
-    "kafka_messages"
+    f"/Volumes/{CATALOG}/raw/"
+    f"kafka_messages"
 )
 
 CHECKPOINT_PATH = (
-    "/Volumes/fvp_lab/raw/"
-    "checkpoints/policy_consent"
+    f"/Volumes/{CATALOG}/raw/"
+    f"checkpoints/"
+    f"policy_consent"
 )
 
 POLICY_CONSENT_TABLE = (
-    "fvp_lab.streaming."
+    f"{CATALOG}.streaming."
     "policy_consent"
 )
 
@@ -40,8 +72,18 @@ COSMOS_TABLES = [
     "resource_cosmos"
 ]
 
+print(
+    f"Kafka path: {KAFKA_PATH}"
+)
+
+print(
+    f"Checkpoint: "
+    f"{CHECKPOINT_PATH}"
+)
+
+
 # ==========================================
-# SCHEMA KAFKA
+# SCHEMA
 # ==========================================
 
 schema = StructType([
@@ -71,6 +113,7 @@ schema = StructType([
     )
 ])
 
+
 # ==========================================
 # STREAM
 # ==========================================
@@ -82,6 +125,7 @@ stream_df = (
     .json(KAFKA_PATH)
 )
 
+
 # ==========================================
 # FOREACH BATCH
 # ==========================================
@@ -92,11 +136,16 @@ def process_policy_consent(
 ):
 
     if micro_batch_df.count() == 0:
+
+        print(
+            "Batch vazio."
+        )
+
         return
 
-    # ======================================
+    # =====================
     # CONTROL FIELDS
-    # ======================================
+    # =====================
 
     consent_df = (
 
@@ -120,13 +169,15 @@ def process_policy_consent(
         )
     )
 
-    # ======================================
-    # UPSERT POLICY CONSENT
-    # ======================================
+    # =====================
+    # POLICY CONSENT UPSERT
+    # =====================
 
-    target = DeltaTable.forName(
-        spark,
-        POLICY_CONSENT_TABLE
+    target = (
+        DeltaTable.forName(
+            spark,
+            POLICY_CONSENT_TABLE
+        )
     )
 
     (
@@ -150,14 +201,14 @@ def process_policy_consent(
         f"batch {batch_id}"
     )
 
-    # ======================================
+    # =====================
     # UPDATE COSMOS
-    # ======================================
+    # =====================
 
     for table in COSMOS_TABLES:
 
         cosmos_table = (
-            f"fvp_lab.cosmos."
+            f"{CATALOG}.cosmos."
             f"{table}"
         )
 
@@ -178,6 +229,7 @@ def process_policy_consent(
 
             .whenMatchedUpdate(
                 set={
+
                     "consentId":
                         "s.consentId",
 
@@ -190,9 +242,10 @@ def process_policy_consent(
         )
 
         print(
-            f"Cosmos atualizado:"
-            f" {table}"
+            f"Cosmos atualizado: "
+            f"{table}"
         )
+
 
 # ==========================================
 # EXECUTE STREAM
@@ -221,37 +274,6 @@ query = (
 query.awaitTermination()
 
 print(
-    "Policy consent stream "
-    "finalizado!"
+    "Policy consent "
+    "stream finalizado!"
 )
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC SELECT
-# MAGIC     policyId,
-# MAGIC     consentId,
-# MAGIC     upsertTimestamp
-# MAGIC FROM fvp_lab.cosmos.general_cosmos
-# MAGIC ORDER BY policyId;
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC SELECT
-# MAGIC     policyId,
-# MAGIC     consentId
-# MAGIC FROM fvp_lab.cosmos.policy_info_cosmos
-# MAGIC ORDER BY policyId;
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC SELECT
-# MAGIC     policyId,
-# MAGIC     consentId
-# MAGIC FROM fvp_lab.cosmos.resource_cosmos
-# MAGIC ORDER BY policyId;
-
-# COMMAND ----------
-

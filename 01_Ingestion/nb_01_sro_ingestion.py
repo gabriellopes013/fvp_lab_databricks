@@ -1,14 +1,42 @@
 # Databricks notebook source
+
 from delta.tables import DeltaTable
 
-# COMMAND ----------
 
-MOCK_SAP = "/Volumes/fvp_lab/raw/mock_sap"
-TRANSIENT = "/Volumes/fvp_lab/raw/transient"
+# ==========================================
+# PARAMETERS
+# ==========================================
 
-# COMMAND ----------
+dbutils.widgets.text(
+    "catalog",
+    "fvp_lab"
+)
 
-spark.sql("USE CATALOG fvp_lab")
+CATALOG = dbutils.widgets.get(
+    "catalog"
+)
+
+print(
+    f"Catalog atual: {CATALOG}"
+)
+
+
+# ==========================================
+# PATHS
+# ==========================================
+
+MOCK_SAP = (
+    "/Volumes/fvp_lab/raw/mock_sap"
+)
+
+TRANSIENT = (
+    "/Volumes/fvp_lab/raw/transient"
+)
+
+
+# ==========================================
+# ENTITIES
+# ==========================================
 
 entities = [
     "general",
@@ -17,45 +45,84 @@ entities = [
     "claim"
 ]
 
-# COMMAND ----------
+
+# ==========================================
+# MOCK SAP → TRANSIENT
+# ==========================================
 
 for entity in entities:
 
-    source_path = f"{MOCK_SAP}/{entity}"
-    target_path = f"{TRANSIENT}/{entity}"
+    source_path = (
+        f"{MOCK_SAP}/{entity}"
+    )
 
-    print(f"Ingerindo {entity} para transient...")
+    target_path = (
+        f"{TRANSIENT}/{entity}"
+    )
+
+    print(
+        f"Ingerindo "
+        f"{entity} "
+        f"para transient..."
+    )
 
     df = (
         spark.read
-        .option("header", True)
+        .option(
+            "header",
+            True
+        )
         .csv(source_path)
     )
 
     (
         df.write
         .mode("overwrite")
-        .option("header", True)
+        .option(
+            "header",
+            True
+        )
         .csv(target_path)
     )
 
-print("Transient carregada com sucesso!")
+print(
+    "Transient carregada "
+    "com sucesso!"
+)
 
-# COMMAND ----------
+
+# ==========================================
+# TRANSIENT → BRONZE
+# ==========================================
 
 for entity in entities:
 
-    transient_path = f"{TRANSIENT}/{entity}"
+    transient_path = (
+        f"{TRANSIENT}/{entity}"
+    )
 
-    table_name = f"fvp_lab.raw.{entity}_bronze"
+    table_name = (
+        f"{CATALOG}.raw."
+        f"{entity}_bronze"
+    )
 
-    print(f"Criando bronze: {table_name}")
+    print(
+        f"Processando bronze: "
+        f"{table_name}"
+    )
 
     source_df = (
         spark.read
-        .option("header", True)
+        .option(
+            "header",
+            True
+        )
         .csv(transient_path)
     )
+
+    # =====================
+    # PRIMEIRA EXECUÇÃO
+    # =====================
 
     if not spark.catalog.tableExists(
         table_name
@@ -65,62 +132,63 @@ for entity in entities:
             source_df.write
             .format("delta")
             .mode("overwrite")
-            .saveAsTable(table_name)
+            .saveAsTable(
+                table_name
+            )
         )
 
         print(
-            f"Tabela criada:"
-            f" {table_name}"
+            f"Tabela criada: "
+            f"{table_name}"
         )
 
-    # ======================================
-    # EXECUÇÕES INCREMENTAIS
-    # ======================================
-
-else:
-
-    target = (
-        DeltaTable.forName(
-            spark,
-            table_name
-        )
-    )
-
-    # ======================================
-    # DEFINE BUSINESS KEY
-    # ======================================
-
-    if entity == "claim":
-
-        merge_condition = (
-            "t.claimId = s.claimId"
-        )
+    # =====================
+    # EXECUÇÃO INCREMENTAL
+    # =====================
 
     else:
 
-        merge_condition = (
-            "t.policyId = s.policyId"
+        target = (
+            DeltaTable.forName(
+                spark,
+                table_name
+            )
         )
 
-    # ======================================
-    # MERGE INCREMENTAL
-    # ======================================
+        # BUSINESS KEY
 
-    (
-        target.alias("t")
-        .merge(
-            source_df.alias("s"),
-            merge_condition
+        if entity == "claim":
+
+            merge_condition = (
+                "t.claimId = "
+                "s.claimId"
+            )
+
+        else:
+
+            merge_condition = (
+                "t.policyId = "
+                "s.policyId"
+            )
+
+        (
+            target.alias("t")
+            .merge(
+                source_df.alias("s"),
+                merge_condition
+            )
+            .whenMatchedUpdateAll()
+            .whenNotMatchedInsertAll()
+            .execute()
         )
-        .whenMatchedUpdateAll()
-        .whenNotMatchedInsertAll()
-        .execute()
-    )
 
-    print(
-        f"MERGE executado:"
-        f" {table_name}"
-    )
+        print(
+            f"MERGE executado: "
+            f"{table_name}"
+        )
 
-# COMMAND ----------
 
+print(
+    "Bronze carregada "
+    "com sucesso!"
+)

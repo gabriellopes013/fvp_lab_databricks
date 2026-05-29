@@ -1,15 +1,45 @@
 # Databricks notebook source
+
 import json
 from datetime import datetime
 
-# COMMAND ----------
 
-volume_path = (
-    "/Volumes/fvp_lab/raw/"
-    "kafka_messages"
+# ==========================================
+# PARAMETERS
+# ==========================================
+
+dbutils.widgets.text(
+    "catalog",
+    "fvp_lab"
 )
 
-# COMMAND ----------
+CATALOG = dbutils.widgets.get(
+    "catalog"
+)
+
+print(
+    f"Catalog atual: {CATALOG}"
+)
+
+
+# ==========================================
+# KAFKA PATH
+# ==========================================
+
+volume_path = (
+    f"/Volumes/{CATALOG}/raw/"
+    f"kafka_messages"
+)
+
+print(
+    f"Volume path: "
+    f"{volume_path}"
+)
+
+
+# ==========================================
+# MOCK EVENTS
+# ==========================================
 
 messages = [
     {
@@ -26,7 +56,14 @@ messages = [
     }
 ]
 
-for i, message in enumerate(messages):
+
+# ==========================================
+# WRITE EVENTS
+# ==========================================
+
+for i, message in enumerate(
+    messages
+):
 
     file_path = (
         f"{volume_path}/"
@@ -35,11 +72,17 @@ for i, message in enumerate(messages):
 
     dbutils.fs.put(
         file_path,
-        json.dumps(message),
+        json.dumps(
+            message
+        ),
         overwrite=True
     )
 
-print("Kafka fake criado!")
+    print(
+        f"Evento criado: "
+        f"{file_path}"
+    )
 
-# COMMAND ----------
-
+print(
+    "Kafka fake criado!"
+)

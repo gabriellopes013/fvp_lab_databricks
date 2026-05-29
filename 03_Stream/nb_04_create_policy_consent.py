@@ -1,10 +1,29 @@
 # Databricks notebook source
-from pyspark.sql.types import *
-
-
-# COMMAND ----------
 
 from pyspark.sql.types import *
+
+
+# ==========================================
+# PARAMETERS
+# ==========================================
+
+dbutils.widgets.text(
+    "catalog",
+    "fvp_lab"
+)
+
+CATALOG = dbutils.widgets.get(
+    "catalog"
+)
+
+print(
+    f"Catalog atual: {CATALOG}"
+)
+
+
+# ==========================================
+# SCHEMA
+# ==========================================
 
 schema = StructType([
 
@@ -32,10 +51,6 @@ schema = StructType([
         True
     ),
 
-    # ==================================
-    # NOVOS CAMPOS DE CONTROLE
-    # ==================================
-
     StructField(
         "processedAt",
         TimestampType(),
@@ -48,6 +63,11 @@ schema = StructType([
         True
     )
 ])
+
+
+# ==========================================
+# CREATE EMPTY TABLE
+# ==========================================
 
 empty_df = spark.createDataFrame(
     [],
@@ -63,18 +83,10 @@ empty_df = spark.createDataFrame(
         "true"
     )
     .saveAsTable(
-        "fvp_lab.streaming.policy_consent"
+        f"{CATALOG}.streaming.policy_consent"
     )
 )
 
 print(
     "Tabela policy_consent criada!"
 )
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC DESCRIBE fvp_lab.streaming.policy_consent;
-
-# COMMAND ----------
-

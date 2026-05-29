@@ -1,31 +1,66 @@
 # Databricks notebook source
+
 from pyspark.sql import functions as F
 
-# COMMAND ----------
 
-spark.sql("USE CATALOG fvp_lab")
+# ==========================================
+# PARAMETERS
+# ==========================================
 
-# COMMAND ----------
+dbutils.widgets.text(
+    "catalog",
+    "fvp_lab"
+)
 
-requested_policy_id = "P003"
+dbutils.widgets.text(
+    "policy_id",
+    "P003"
+)
 
-# COMMAND ----------
+CATALOG = dbutils.widgets.get(
+    "catalog"
+)
 
-policy_consent = (
-    spark.table(
-        "fvp_lab.streaming.policy_consent"
-    )
-    .filter(
-        F.col("policyId") == requested_policy_id
+REQUESTED_POLICY_ID = (
+    dbutils.widgets.get(
+        "policy_id"
     )
 )
 
+print(
+    f"Catalog atual: {CATALOG}"
+)
 
-# COMMAND ----------
+print(
+    f"Policy ID: "
+    f"{REQUESTED_POLICY_ID}"
+)
 
-consent = policy_consent.collect()
 
-# COMMAND ----------
+# ==========================================
+# READ POLICY CONSENT
+# ==========================================
+
+policy_consent = (
+
+    spark.table(
+        f"{CATALOG}.streaming.policy_consent"
+    )
+
+    .filter(
+        F.col("policyId")
+        == REQUESTED_POLICY_ID
+    )
+)
+
+consent = (
+    policy_consent.collect()
+)
+
+
+# ==========================================
+# VALIDATE CONSENT
+# ==========================================
 
 if len(consent) == 0:
 
@@ -36,7 +71,9 @@ if len(consent) == 0:
 
 else:
 
-    consent_row = consent[0]
+    consent_row = (
+        consent[0]
+    )
 
     if consent_row["allowed"] is False:
 
@@ -47,32 +84,40 @@ else:
     else:
 
         consent_id = (
-            consent_row["consentId"]
+            consent_row[
+                "consentId"
+            ]
         )
 
-        # ==========================
-        # CONSULTA COSMOS
-        # ==========================
+        # ======================
+        # READ COSMOS
+        # ======================
 
         cosmos_df = (
+
             spark.table(
-                "fvp_lab.streaming.cosmos_policy"
+                f"{CATALOG}.cosmos.general_cosmos"
             )
+
             .filter(
                 F.col("policyId")
-                == requested_policy_id
+                == REQUESTED_POLICY_ID
             )
         )
 
-        # ==========================
-        # SUBSTITUI NULL
-        # ==========================
+        # ======================
+        # ADD CONSENT ID
+        # ======================
 
         response_df = (
+
             cosmos_df
+
             .withColumn(
                 "consentId",
-                F.lit(consent_id)
+                F.lit(
+                    consent_id
+                )
             )
         )
 
@@ -80,7 +125,6 @@ else:
             "Documento retornado:"
         )
 
-        display(response_df)
-
-# COMMAND ----------
-
+        display(
+            response_df
+        )

@@ -1,26 +1,52 @@
 # Databricks notebook source
+
 from pyspark.sql import functions as F
 from delta.tables import DeltaTable
 
-# COMMAND ----------
+
+# ==========================================
+# PARAMETERS
+# ==========================================
+
+dbutils.widgets.text(
+    "catalog",
+    "fvp_lab"
+)
+
+CATALOG = dbutils.widgets.get(
+    "catalog"
+)
+
+print(
+    f"Catalog atual: {CATALOG}"
+)
+
+
+# ==========================================
+# ENTITIES
+# ==========================================
 
 entities = [
-
     "general",
     "policy_info",
     "premium",
     "claim"
 ]
 
+
+# ==========================================
+# SILVER → COSMOS
+# ==========================================
+
 for entity in entities:
 
     source_table = (
-        f"fvp_lab.trusted."
+        f"{CATALOG}.trusted."
         f"{entity}_silver"
     )
 
     target_table = (
-        f"fvp_lab.cosmos."
+        f"{CATALOG}.cosmos."
         f"{entity}_cosmos"
     )
 
@@ -33,8 +59,8 @@ for entity in entities:
     )
 
     # =====================================
-    # CONSENT ID NULL
-    # (vem do Kafka depois)
+    # CONSENT ID
+    # (vem do streaming depois)
     # =====================================
 
     if "consentId" not in source_df.columns:
@@ -48,7 +74,7 @@ for entity in entities:
         )
 
     # =====================================
-    # CARIMBO COSMOS
+    # UPSERT TIMESTAMP
     # =====================================
 
     source_df = (
@@ -59,7 +85,7 @@ for entity in entities:
     )
 
     # =====================================
-    # CREATE TABLE
+    # FIRST EXECUTION
     # =====================================
 
     if not spark.catalog.tableExists(
@@ -80,11 +106,12 @@ for entity in entities:
         )
 
         print(
-            f"Criada: {target_table}"
+            f"Tabela criada: "
+            f"{target_table}"
         )
 
     # =====================================
-    # MERGE INCREMENTAL
+    # INCREMENTAL MERGE
     # =====================================
 
     else:
@@ -94,7 +121,8 @@ for entity in entities:
             target_table
         )
 
-        # claim usa claimId
+        # business key
+
         if entity == "claim":
 
             merge_condition = (
@@ -109,27 +137,20 @@ for entity in entities:
 
         (
             target.alias("t")
-
             .merge(
                 source_df.alias("s"),
                 merge_condition
             )
-
             .whenMatchedUpdateAll()
-
             .whenNotMatchedInsertAll()
-
             .execute()
         )
 
         print(
-            f"Merge executado:"
-            f" {target_table}"
+            f"MERGE executado: "
+            f"{target_table}"
         )
 
 print(
     "Silver → Cosmos finalizado!"
 )
-
-# COMMAND ----------
-

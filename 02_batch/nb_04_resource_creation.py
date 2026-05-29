@@ -1,8 +1,39 @@
 # Databricks notebook source
+
 from pyspark.sql import functions as F
-general_df = spark.table(
-    "fvp_lab.trusted.general_silver"
+
+
+# ==========================================
+# PARAMETERS
+# ==========================================
+
+dbutils.widgets.text(
+    "catalog",
+    "fvp_lab"
 )
+
+CATALOG = dbutils.widgets.get(
+    "catalog"
+)
+
+print(
+    f"Catalog atual: {CATALOG}"
+)
+
+
+# ==========================================
+# READ SILVER
+# ==========================================
+
+general_df = spark.table(
+    f"{CATALOG}.trusted.general_silver"
+)
+
+
+# ==========================================
+# BUILD RESOURCE
+# ==========================================
+
 resource_df = (
 
     general_df
@@ -41,6 +72,11 @@ resource_df = (
     )
 )
 
+
+# ==========================================
+# WRITE COSMOS
+# ==========================================
+
 (
     resource_df.write
     .format("delta")
@@ -50,20 +86,10 @@ resource_df = (
         "true"
     )
     .saveAsTable(
-        "fvp_lab.cosmos.resource_cosmos"
+        f"{CATALOG}.cosmos.resource_cosmos"
     )
 )
 
 print(
     "Resource cosmos criado!"
 )
-
-
-# COMMAND ----------
-
-# MAGIC
-# MAGIC %sql
-# MAGIC SELECT * FROM fvp_lab.cosmos.resource_cosmos
-
-# COMMAND ----------
-
